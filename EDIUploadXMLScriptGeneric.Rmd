@@ -1,0 +1,213 @@
+---
+title: "Create XML file for EDI Upload"
+author: "Kim Vincent"
+date: "2020-02-08"
+output: html_document
+---
+
+This scripts walks through the steps to create an XML file needed to upload data to the Environmental Data Initiative (EDI): environmentaldatainitiative.org. 
+
+What is your user_id? 
+To upload data to EDI, you need to have a user.id. You may get one by requesting it from info@environmentaldatainitiative.org.
+```{r}
+user_ID <- "enter user_id here" # Must request from info@environmentaldatainitiative.org
+```
+
+What is the title of the dataset? (be descriptive, must be between 7 and 20 words)
+```{r}
+dataset_title <- "Enter title here"
+```
+
+What are the start and end dates of the dataset?
+```{r}
+# Must use double digit months for single digit months.
+start_date <- "YYYY-MM-DD" 
+end_date <- "YYYY-MM-DD"
+```
+
+Is this project ongoing or complete?
+```{r}
+status <- "complete"
+```
+
+Specify the geographic region where this data was collected. 
+```{r}
+verbal_description <- "Rocky Mountain National Park and Snowy Range, Colorado and Wyoming, USA"
+N <- "41.3793" # North bounding coordinates (decimals) , 
+S <- "40.1726" # South bounding coordinates (decimals) 
+E <- "-105.5936" # East bounding coordinates (decimals)
+W <- "-106.2747" # West bounding coordinates (decimals)
+```
+
+Intellectual Rights: What license would you like to use?
+```{r}
+license <- "CCBY"
+```
+
+Are you uploading LTER data? If so, specify the user domain as "LTER". If not, specify the user domain as "EDI".
+```{r}
+user_domain <- "EDI"
+```
+
+Create a package id
+```{r}
+# 1. Identify data scope
+# Search here: https://portal.edirepository.org/nis/scopebrowse
+scope <- "edi" #"edi/ ecotrends... "
+
+# 2. Find the next available number in the scope you chose above. 
+dataset_number <- 123 #"next available number" 
+
+# 3. Identify the version. i.e. the first upload is 1, the first revision is 2, the second revision is 3, etc. 
+version <- "1" # Change for each revision. 
+
+# Put information together. 
+package_id <- paste0(scope, ".", dataset_number, ".", version) 
+package_id
+```
+
+Install packages
+```{r}
+remotes::install_github("EDIorg/EMLassemblyline") # Install EML assemblyline from GitHub
+
+library(EMLassemblyline) # load the library
+```
+
+Name the directory where you'd like to put your files. Also create a folder to house your original datasets.
+```{r}
+directory <- "DirectoryName_EML"
+ifelse(!dir.exists(file.path(paste0("./", directory, "/original_data"))),
+       dir.create(file.path(paste0("./", directory, "/original_data"))),
+       FALSE)
+```
+
+Make sure your datasets are clean and upload them to the original data folder you just created.
+
+Note that this script is part of an R project and defaults to the project directory. If you weren't scripting in RMarkdown, you would want to set your working directory.
+
+Template a data package directory.
+```{r}
+template_directories(
+  path = ".", # navigates to the working directory
+  dir.name = directory) # defined above
+
+# View directory contents (folders to hold the EML objects)
+dir(paste0("./", directory))
+
+# Confirm that the templates directory is empty
+dir(paste0("./", directory, '/metadata_templates'))
+```
+
+Create templates to be populated later.
+```{r}
+# Create templates for core metadata
+template_core_metadata(
+  path = paste0("./", directory, "/metadata_templates"),
+  license = license)
+
+# Confirm that the templates core metadata files are now present
+dir(paste0("./", directory, "/metadata_templates"))
+```
+
+Clean your datasets before uploading them. Notes: Data should be in csv text file. If starting with an Excel spreadsheet, please make sure it does not contain any formulas and comments on cells. If you need comments put them in their own column. If data were used in a database and major table linking is necessary to analyze, please de-normalize into a flat file, not just database table exports.
+
+Create a data folder to hold the data files within the working directory. 
+```{r}
+og_data.fp <- "/Users/name/Documents/Data_filepath"
+```
+
+Copy the cleaned datasets from the Data folder to the directory and describe the datasets. (Copying keeps the original version intact)
+```{r}
+# Enter the name of the csvs to upload and a description
+csv1 <- "CrossingTreeline_cleaned.csv"
+csv1_description <- "Water chemistry and other measured characteristics of Rocky Mountain lakes"
+
+csv2 <- "Seq_Table_Bac_wtaxa.csv"
+csv2_description <- "Relative abundance of bacterial taxa by sample for alpine and subalpine lakes"
+
+file.copy(from = paste0(og_data.fp, "/", csv1),
+          to = paste0("./", directory, "/data_objects"))
+
+file.copy(from = paste0(og_data.fp, "/", csv2),
+          to = paste0("./", directory, "/data_objects"))
+
+# Repeat for more datasets if present.
+
+# Confirm that the files are present in the EML directory
+dir(paste0("./", directory, "/data_objects"))
+```
+
+Create the template attribute table for each table you are uploading.
+```{r}
+# Create template attribute tables for each table
+template_table_attributes(
+  path = paste0("./", directory, "/metadata_templates"),
+  data.path = paste0("./", directory, "/data_objects"),
+  data.table = c(csv1, csv2))
+
+# Check that attribute table templates are now present
+dir(paste0("./", directory, "/metadata_templates"))
+paste("Stop and manually edit the variable types in the attribute files: attributes...")
+
+# These two lines open a searchable window in R Studio with the library of units
+standardUnits <- EML::get_unitList()
+View(standardUnits$units)
+```
+
+At this point, you will need to manually edit the variable types in the attribute files: "attributes..."
+
+The easiest way to do this is to open the attribute tables in Excel for editing. Check especially for categorical and datetime variables as sometimes these are attributed as numeric or factors. Correctly identifying the categorical variables is very important before proceeding to the next step. To download documentation regarding attributes, click here: https://environmentaldatainitiative.files.wordpress.com/2017/11/emlbestpractices-v3.pdf
+
+After populating the attributes, you will create templates to define the categorical variables.
+
+Create the template attribute table for categorical variables. 
+```{r}
+# Create template categorical variables
+template_categorical_variables(
+  path = paste0("./", directory, "/metadata_templates"),
+  data.path = paste0("./", directory, "/data_objects"))
+paste("Stop and manually edit the categorical variables in the categorical template files: catvars...")
+```
+
+Populate template files
+
+Before moving on, you will need to populate the template files in the metadat_templates folder. This is most easily done by composing text in a text editor and copying into the files in the metadata_templates folder. The following chunk of code compiles all the files, so only proceed to the next step once populating is completed.
+
+1. Edit the categorical variables in the categorical template files for each dataset you are uploading (catvars...).
+
+2. Edit the abstract.txt file by opening and pasting the abstract information into the text file.
+
+3. Edit the additional_info.txt file by opening and pasting the abstract information into the text file. Leave blank if no additional info.
+
+4. Edit the custom_units.txt file by opening in Excel and adding any custom units not found in the library of units. Leave blank if no additional info.
+
+5. Edit the keywords.txt file by opening in Excel.
+For keywords, see the LTER Controlled Vocabulary Library: https://vocab.lternet.edu/vocab/vocab/index.php
+
+6. Edit the personnel.txt file by opening in Excel. Repeat on multiple lines if the person plays multiple roles. Required: PI, creator (this refers to the EDI depository), contact. Only need to list the grant information on one line.
+
+
+Construct the EML document.
+The code does not need to be altered; all arguments have been specified.
+```{r}
+
+make_eml(
+  path = paste0("./", directory, "/metadata_templates"),
+  data.path = paste0("./", directory, "/data_objects"),
+  eml.path = paste0("./", directory, "/eml"),
+  dataset.title = dataset_title,
+  temporal.coverage = c(start_date, end_date),
+  geographic.description = verbal_description,
+  geographic.coordinates = c(N, E, S, W),
+  maintenance.description = status,
+  data.table = c(csv1, csv2),
+  data.table.description = c(csv1_description, csv2_description),
+  user.id = user_ID,
+  user.domain = user_domain,
+  package.id = package_id
+)
+warnings()
+
+# View directory
+dir(paste0("./", directory, "/eml"))
+```
